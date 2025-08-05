@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoza's Website</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #instructions {
+            position: absolute;
+            color: white;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: Arial, sans-serif;
+            text-align: center;
+            opacity: 0.5;
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="spaceCanvas"></canvas>
+    <div id="instructions">Предоставлено в ознакомительных целях</div>
+
+    <script>
+        const canvas = document.getElementById('spaceCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        // Настройки эффектов
+        const config = {
+            stars: 300,  // Уменьшено количество звезд
+            starSize: 0.3,  // Уменьшен размер звезд
+            lightning: {
+                count: 5,
+                fade: 0.95,
+                branches: 7
+            },
+            particle: {
+                size: 5,
+                color: 'rgba(100, 200, 255, 0.8)'
+            }
+        };
+
+        // Инициализация
+        function init() {
+            resize();
+            window.addEventListener('resize', resize);
+            canvas.addEventListener('mousemove', updateParticlePosition);
+            canvas.addEventListener('click', createLightning);
+            
+            // Создаем статичные звезды (белые шары на заднем фоне)
+            stars = Array.from({length: config.stars}, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                z: 0.5 + Math.random() * 0.5,  // Фиксированная позиция
+                size: config.starSize * (0.5 + Math.random())
+            }));
+
+            // Инициализация частицы
+            particle = {
+                x: width/2,
+                y: height/2,
+                visible: false
+            };
+            
+            // Запускаем анимацию
+            requestAnimationFrame(animate);
+        }
+
+        // Обработка изменения размера
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        // Статичное звездное поле (белые шары)
+        function updateStars() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+            
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.z})`;
+                ctx.fill();
+            });
+        }
+
+        // Молнии при клике
+        let lightning = null;
+        
+        function createLightning(e) {
+            const x = e.clientX;
+            const y = e.clientY;
+            
+            lightning = {
+                x: x,
+                y: y,
+                branches: [],
+                alpha: 1
+            };
+            
+            // Создаем ветви молний
+            for (let i = 0; i < config.lightning.branches; i++) {
+                lightning.branches.push(createLightningBranch(x, y));
+            }
+        }
+        
+        function createLightningBranch(x, y) {
+            const segments = [];
+            const count = 10 + Math.floor(Math.random() * 10);
+            let lastX = x;
+            let lastY = y;
+            
+            // Начальный угол - случайный
+            let angle = Math.random() * Math.PI * 2;
+            
+            for (let i = 0; i < count; i++) {
+                // Меняем угол на каждом сегменте
+                angle += (Math.random() - 0.5) * Math.PI/2;
+                const length = 10 + Math.random() * 50;
+                const newX = lastX + Math.cos(angle) * length;
+                const newY = lastY + Math.sin(angle) * length;
+                
+                segments.push({
+                    x1: lastX,
+                    y1: lastY,
+                    x2: newX,
+                    y2: newY
+                });
+                
+                lastX = newX;
+                lastY = newY;
+            }
+            
+            return {
+                segments: segments,
+                life: 1
+            };
+        }
+        
+        function updateLightning() {
+            if (!lightning) return;
+            
+            lightning.branches.forEach(branch => {
+                branch.life -= 0.02;
+                
+                ctx.lineWidth = 1 + Math.random();
+                ctx.strokeStyle = `rgba(150, 200, 255, ${lightning.alpha * branch.life})`;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                ctx.beginPath();
+                branch.segments.forEach((seg, i) => {
+                    if (i === 0) {
+                        ctx.moveTo(seg.x1, seg.y1);
+                    }
+                    ctx.lineTo(
+                        seg.x1 + (seg.x2 - seg.x1) * (1 - branch.life),
+                        seg.y1 + (seg.y2 - seg.y1) * (1 - branch.life)
+                    );
+                });
+                ctx.stroke();
+            });
+            
+            lightning.alpha *= config.lightning.fade;
+            
+            if (lightning.alpha < 0.05) {
+                lightning = null;
+            }
+        }
+
+        // Единственная частица
+        let particle;
+        
+        function updateParticlePosition(e) {
+            particle.x = e.clientX;
+            particle.y = e.clientY;
+            particle.visible = true;
+        }
+        
+        function updateParticle() {
+            if (!particle.visible) return;
+            
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, config.particle.size, 0, Math.PI * 2);
+            
+            // Градиент для свечения
+            const gradient = ctx.createRadialGradient(
+                particle.x, particle.y, 0,
+                particle.x, particle.y, config.particle.size
+            );
+            gradient.addColorStop(0, config.particle.color);
+            gradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+
+        // Основной цикл анимации
+        function animate() {
+            updateStars();
+            updateLightning();
+            updateParticle();
+            requestAnimationFrame(animate);
+        }
+
+        // Запускаем приложение
+        window.onload = init;
+    </script>
+</body>
+</html>
